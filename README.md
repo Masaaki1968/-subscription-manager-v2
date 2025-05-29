@@ -1,0 +1,1 @@
+# -subscription-manager-v3
