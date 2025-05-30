@@ -58,20 +58,31 @@ export default function Home() {
         const text = await response.text();
         addDebugInfo(`生レスポンス: ${text.substring(0, 500)}...`);
         
+        // "Accepted"のみの場合はローカルデータを使用
+        if (text.trim() === 'Accepted' || text.trim() === '"Accepted"') {
+          addDebugInfo('レスポンスが"Accepted"のみ - Make.com設定要修正');
+          loadFromLocalStorage();
+          return;
+        }
+        
         let data;
         try {
           data = JSON.parse(text);
         } catch (e) {
           addDebugInfo(`JSON解析エラー: ${e.message}`);
-          throw new Error('Invalid JSON response');
+          loadFromLocalStorage();
+          return;
         }
         
-        addDebugInfo(`解析後データ型: ${typeof data}, 配列: ${Array.isArray(data)}`);
+        // data.dataが存在する場合の対応
+        const actualData = data.data || data;
         
-        if (Array.isArray(data)) {
-          addDebugInfo(`配列長: ${data.length}`);
+        addDebugInfo(`解析後データ型: ${typeof actualData}, 配列: ${Array.isArray(actualData)}`);
+        
+        if (Array.isArray(actualData)) {
+          addDebugInfo(`配列長: ${actualData.length}`);
           
-          const formattedData = data
+          const formattedData = actualData
             .map((row, index) => {
               addDebugInfo(`行${index + 1}: ${JSON.stringify(row)}`);
               
@@ -109,7 +120,7 @@ export default function Home() {
           
         } else {
           addDebugInfo('データが配列ではありません');
-          throw new Error('Response is not an array');
+          loadFromLocalStorage();
         }
       } else {
         addDebugInfo(`データ取得失敗: ${response.status} ${response.statusText}`);
