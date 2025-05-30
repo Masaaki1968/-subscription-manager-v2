@@ -87,29 +87,31 @@ export default function Home() {
               addDebugInfo(`行${index + 1}: ${JSON.stringify(row)}`);
               
               // Make.comの数字キー形式に対応
-              const id = row['0'] || row.ID || row.id || row.A || generateId();
-              const serviceName = row['1'] || row['サービス名'] || row.serviceName || row.B || '';
-              const monthlyCost = row['2'] || row['月額料金'] || row.monthlyCost || row.C || '';
-              const billingCycle = row['3'] || row['課金サイクル'] || row.billingCycle || row.D || 'monthly';
-              const category = row['4'] || row['カテゴリ'] || row.category || row.E || 'その他';
-              const createdAt = row['5'] || row['作成日'] || row.createdAt || row.F || '';
+              const id = row['0'] || generateId();
+              const serviceName = row['1'] || '';
+              const monthlyCost = parseFloat(row['2']) || 0;
+              const billingCycle = row['3'] || 'monthly';
+              const category = row['4'] || 'その他';
+              const createdAt = row['5'] || '';
+              
+              addDebugInfo(`変換: ${serviceName} - ¥${monthlyCost} - ${billingCycle} - ${category}`);
               
               return {
                 id: id,
                 serviceName: serviceName,
-                monthlyCost: parseFloat(monthlyCost) || 0,
+                monthlyCost: monthlyCost,
                 billingCycle: billingCycle,
                 category: category,
+                createdAt: createdAt,
                 originalRow: index + 2 // Google Sheetsの行番号（ヘッダー考慮）
               };
             })
             .filter(item => {
               // ヘッダー行や空行を除外
               const isValid = item.serviceName && 
-                             item.serviceName !== 'サービス名' && 
                              item.serviceName.trim() !== '' &&
                              item.monthlyCost > 0;
-              addDebugInfo(`行有効性: ${item.serviceName} -> ${isValid}`);
+              addDebugInfo(`行有効性: "${item.serviceName}" (料金:${item.monthlyCost}) -> ${isValid}`);
               return isValid;
             });
           
