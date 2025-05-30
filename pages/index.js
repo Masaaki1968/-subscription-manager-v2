@@ -86,15 +86,16 @@ export default function Home() {
             .map((row, index) => {
               addDebugInfo(`行${index + 1}: ${JSON.stringify(row)}`);
               
-              // 複数のキー形式に対応
-              const id = row.ID || row.id || row.A || '';
-              const serviceName = row['サービス名'] || row.serviceName || row.B || '';
-              const monthlyCost = row['月額料金'] || row.monthlyCost || row.C || '';
-              const billingCycle = row['課金サイクル'] || row.billingCycle || row.D || 'monthly';
-              const category = row['カテゴリ'] || row.category || row.E || 'その他';
+              // Make.comの数字キー形式に対応
+              const id = row['0'] || row.ID || row.id || row.A || generateId();
+              const serviceName = row['1'] || row['サービス名'] || row.serviceName || row.B || '';
+              const monthlyCost = row['2'] || row['月額料金'] || row.monthlyCost || row.C || '';
+              const billingCycle = row['3'] || row['課金サイクル'] || row.billingCycle || row.D || 'monthly';
+              const category = row['4'] || row['カテゴリ'] || row.category || row.E || 'その他';
+              const createdAt = row['5'] || row['作成日'] || row.createdAt || row.F || '';
               
               return {
-                id: id || generateId(),
+                id: id,
                 serviceName: serviceName,
                 monthlyCost: parseFloat(monthlyCost) || 0,
                 billingCycle: billingCycle,
