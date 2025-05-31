@@ -1,4 +1,14 @@
-import { useState, useEffect } from 'react';
+<div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label>サービス名:</label>
+                <input
+                  type="text"
+                  value={formData.serviceName}
+                  onChange={(e) => setFormData({...formData, serviceName: e.target.value})}
+                  style={{ marginLeft: '10px', padding: '5px', width: '200px' }}
+                  placeholder="Netflix"
+                />import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [subscriptions, setSubscriptions] = useState([]);
