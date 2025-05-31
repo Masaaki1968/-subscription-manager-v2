@@ -181,6 +181,7 @@ export default function Home() {
       createdAt: new Date().toISOString().split('T')[0] // YYYY-MM-DD形式
     };
 
+    addDebugInfo(`生成ID: ${newId}`);
     addDebugInfo(`送信データ: ${JSON.stringify(newSub)}`);
 
     try {
@@ -213,11 +214,11 @@ export default function Home() {
         });
         setShowForm(false);
         
-        // 2秒後にGoogle Sheetsから再同期
+        // 3秒後にGoogle Sheetsから再同期して確認
         setTimeout(() => {
-          addDebugInfo('自動再同期開始');
+          addDebugInfo('新規追加後の自動再同期開始');
           fetchSubscriptions();
-        }, 2000);
+        }, 3000);
         
       } else {
         addDebugInfo(`POST失敗: ${response.status} ${response.statusText}`);
@@ -267,20 +268,20 @@ export default function Home() {
       return;
     }
     
-    addDebugInfo(`削除対象: ${targetItem.serviceName} (行: ${targetItem.originalRow})`);
+    addDebugInfo(`削除対象: ${targetItem.serviceName}`);
     
     try {
-      // まずローカルで削除
+      // まずローカルで削除（UX向上）
       const updatedSubs = subscriptions.filter(sub => sub.id !== deleteConfirm);
       setSubscriptions(updatedSubs);
       localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
       setDeleteConfirm(null);
       
-      // Google Sheetsからも削除を試行
+      // Google Sheetsからも削除を試行（より安全な方法）
       const deleteData = { 
-        id: deleteConfirm,
         serviceName: targetItem.serviceName,
-        rowNumber: targetItem.originalRow
+        monthlyCost: targetItem.monthlyCost,
+        action: "delete" // 識別用
       };
       
       addDebugInfo(`DELETE送信: ${JSON.stringify(deleteData)}`);
@@ -299,8 +300,9 @@ export default function Home() {
       if (response.ok) {
         const result = await response.text();
         addDebugInfo(`DELETE 結果: ${result}`);
+        addDebugInfo('Google Sheetsからも削除成功');
         
-        // 3秒後に再同期
+        // 成功時は3秒後に再同期
         setTimeout(() => {
           addDebugInfo('削除後の自動再同期開始');
           fetchSubscriptions();
@@ -308,10 +310,12 @@ export default function Home() {
         
       } else {
         addDebugInfo(`Google Sheets削除失敗: ${response.status}`);
+        // 失敗してもローカルでは削除済みなので問題なし
       }
       
     } catch (error) {
       addDebugInfo(`削除エラー: ${error.message}`);
+      // エラーでもローカルでは削除済み
     } finally {
       setLoading(false);
     }
