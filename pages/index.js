@@ -1,14 +1,4 @@
-<div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label>サービス名:</label>
-                <input
-                  type="text"
-                  value={formData.serviceName}
-                  onChange={(e) => setFormData({...formData, serviceName: e.target.value})}
-                  style={{ marginLeft: '10px', padding: '5px', width: '200px' }}
-                  placeholder="Netflix"
-                />import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -21,7 +11,7 @@ export default function Home() {
     monthlyCost: '',
     billingCycle: 'monthly',
     category: 'その他',
-    joinDate: new Date().toISOString().split('T')[0] // 今日の日付をデフォルト
+    joinDate: ''
   });
 
   // Make.com Webhook URLs
@@ -32,15 +22,13 @@ export default function Home() {
     DELETE: 'https://hook.eu1.make.com/iu17526sgvhfvic71vecgpwzfjtz4wq0'
   };
 
-  // デバッグ情報を更新
-  const addDebugInfo = (info) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugInfo(prev => `${timestamp}: ${info}\n${prev}`);
-    console.log(info);
-  };
-
-  // 初期データ読み込み
+  // 初期化
   useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setFormData(prev => ({
+      ...prev,
+      joinDate: today
+    }));
     fetchSubscriptions();
   }, []);
 
@@ -53,41 +41,53 @@ export default function Home() {
   const calculateNextRenewal = (joinDate, billingCycle) => {
     if (!joinDate) return '';
     
-    const join = new Date(joinDate);
-    const today = new Date();
-    
-    if (billingCycle === 'yearly') {
-      // 年額の場合
-      let nextRenewal = new Date(join);
-      nextRenewal.setFullYear(join.getFullYear() + 1);
+    try {
+      const join = new Date(joinDate);
+      const today = new Date();
       
-      // 既に過ぎている場合は来年
-      while (nextRenewal <= today) {
-        nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+      if (billingCycle === 'yearly') {
+        let nextRenewal = new Date(join);
+        nextRenewal.setFullYear(join.getFullYear() + 1);
+        
+        while (nextRenewal <= today) {
+          nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+        }
+        return nextRenewal.toISOString().split('T')[0];
+      } else {
+        let nextRenewal = new Date(join);
+        nextRenewal.setMonth(join.getMonth() + 1);
+        
+        while (nextRenewal <= today) {
+          nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+        }
+        return nextRenewal.toISOString().split('T')[0];
       }
-      return nextRenewal.toISOString().split('T')[0];
-    } else {
-      // 月額の場合
-      let nextRenewal = new Date(join);
-      nextRenewal.setMonth(join.getMonth() + 1);
-      
-      // 既に過ぎている場合は翌月
-      while (nextRenewal <= today) {
-        nextRenewal.setMonth(nextRenewal.getMonth() + 1);
-      }
-      return nextRenewal.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Date calculation error:', error);
+      return '';
     }
   };
 
   // 日付を読みやすい形式に変換
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'numeric', 
-      day: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ja-JP', {
+        year: 'numeric',
+        month: 'numeric', 
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // デバッグ情報を更新
+  const addDebugInfo = (info) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugInfo(prev => timestamp + ': ' + info + '\n' + prev);
+    console.log(info);
   };
 
   // Google Sheetsからデータ取得
@@ -104,13 +104,12 @@ export default function Home() {
         }
       });
       
-      addDebugInfo(`GET ステータス: ${response.status}`);
+      addDebugInfo('GET ステータス: ' + response.status);
       
       if (response.ok) {
         const text = await response.text();
-        addDebugInfo(`生レスポンス: ${text.substring(0, 500)}...`);
+        addDebugInfo('生レスポンス: ' + text.substring(0, 200) + '...');
         
-        // "Accepted"のみの場合はローカルデータを使用
         if (text.trim() === 'Accepted' || text.trim() === '"Accepted"') {
           addDebugInfo('レスポンスが"Accepted"のみ - Make.com設定要修正');
           loadFromLocalStorage();
@@ -121,33 +120,26 @@ export default function Home() {
         try {
           data = JSON.parse(text);
         } catch (e) {
-          addDebugInfo(`JSON解析エラー: ${e.message}`);
+          addDebugInfo('JSON解析エラー: ' + e.message);
           loadFromLocalStorage();
           return;
         }
         
-        // data.dataが存在する場合の対応
         const actualData = data.data || data;
-        
-        addDebugInfo(`解析後データ型: ${typeof actualData}, 配列: ${Array.isArray(actualData)}`);
+        addDebugInfo('解析後データ型: ' + typeof actualData + ', 配列: ' + Array.isArray(actualData));
         
         if (Array.isArray(actualData)) {
-          addDebugInfo(`配列長: ${actualData.length}`);
+          addDebugInfo('配列長: ' + actualData.length);
           
           const formattedData = actualData
             .map((row, index) => {
-              addDebugInfo(`行${index + 1}: ${JSON.stringify(row)}`);
-              
-              // Make.comの数字キー形式に対応
               const id = row['0'] || generateId();
               const serviceName = row['1'] || '';
               const monthlyCost = parseFloat(row['2']) || 0;
               const billingCycle = row['3'] || 'monthly';
               const category = row['4'] || 'その他';
               const createdAt = row['5'] || '';
-              const joinDate = row['6'] || row['5'] || ''; // 加入日（新規追加または作成日を使用）
-              
-              addDebugInfo(`変換: ${serviceName} - ¥${monthlyCost} - ${billingCycle} - ${category} - 加入日:${joinDate}`);
+              const joinDate = row['6'] || row['5'] || '';
               
               return {
                 id: id,
@@ -158,22 +150,18 @@ export default function Home() {
                 createdAt: createdAt,
                 joinDate: joinDate,
                 nextRenewal: calculateNextRenewal(joinDate, billingCycle),
-                originalRow: index + 2 // Google Sheetsの行番号（ヘッダー考慮）
+                originalRow: index + 2
               };
             })
             .filter(item => {
-              // ヘッダー行や空行を除外
               const isValid = item.serviceName && 
                              item.serviceName.trim() !== '' &&
                              item.monthlyCost > 0;
-              addDebugInfo(`行有効性: "${item.serviceName}" (料金:${item.monthlyCost}) -> ${isValid}`);
               return isValid;
             });
           
-          addDebugInfo(`有効データ: ${formattedData.length}件`);
+          addDebugInfo('有効データ: ' + formattedData.length + '件');
           setSubscriptions(formattedData);
-          
-          // ローカルストレージにも保存
           localStorage.setItem('subscriptions', JSON.stringify(formattedData));
           
         } else {
@@ -181,11 +169,11 @@ export default function Home() {
           loadFromLocalStorage();
         }
       } else {
-        addDebugInfo(`データ取得失敗: ${response.status} ${response.statusText}`);
+        addDebugInfo('データ取得失敗: ' + response.status + ' ' + response.statusText);
         loadFromLocalStorage();
       }
     } catch (error) {
-      addDebugInfo(`データ取得エラー: ${error.message}`);
+      addDebugInfo('データ取得エラー: ' + error.message);
       loadFromLocalStorage();
     } finally {
       setLoading(false);
@@ -199,9 +187,9 @@ export default function Home() {
       try {
         const localData = JSON.parse(saved);
         setSubscriptions(localData);
-        addDebugInfo(`ローカルデータ使用: ${localData.length}件`);
+        addDebugInfo('ローカルデータ使用: ' + localData.length + '件');
       } catch (e) {
-        addDebugInfo(`ローカルデータ解析エラー: ${e.message}`);
+        addDebugInfo('ローカルデータ解析エラー: ' + e.message);
         setSubscriptions([]);
       }
     } else {
@@ -234,11 +222,11 @@ export default function Home() {
       billingCycle: formData.billingCycle,
       category: formData.category,
       joinDate: formData.joinDate,
-      createdAt: new Date().toISOString().split('T')[0] // YYYY-MM-DD形式
+      createdAt: new Date().toISOString().split('T')[0]
     };
 
-    addDebugInfo(`生成ID: ${newId}`);
-    addDebugInfo(`送信データ: ${JSON.stringify(newSub)}`);
+    addDebugInfo('生成ID: ' + newId);
+    addDebugInfo('送信データ: ' + JSON.stringify(newSub));
 
     try {
       const response = await fetch(API_URLS.POST, {
@@ -250,67 +238,65 @@ export default function Home() {
         body: JSON.stringify(newSub)
       });
 
-      addDebugInfo(`POST ステータス: ${response.status}`);
+      addDebugInfo('POST ステータス: ' + response.status);
       
       if (response.ok) {
         const result = await response.text();
-        addDebugInfo(`POST 結果: ${result}`);
+        addDebugInfo('POST 結果: ' + result);
         
-        // ローカルに即座に追加
-        const localSub = { 
-          ...newSub, 
+        const localSub = Object.assign({}, newSub, {
           nextRenewal: calculateNextRenewal(newSub.joinDate, newSub.billingCycle),
-          originalRow: subscriptions.length + 2 
-        };
-        const updatedSubs = [...subscriptions, localSub];
+          originalRow: subscriptions.length + 2
+        });
+        
+        const updatedSubs = subscriptions.concat([localSub]);
         setSubscriptions(updatedSubs);
         localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
         
-        // フォームリセット
+        const today = new Date().toISOString().split('T')[0];
         setFormData({
           serviceName: '',
           monthlyCost: '',
           billingCycle: 'monthly',
           category: 'その他',
-          joinDate: new Date().toISOString().split('T')[0]
+          joinDate: today
         });
         setShowForm(false);
         
-        // 3秒後にGoogle Sheetsから再同期して確認
         setTimeout(() => {
           addDebugInfo('新規追加後の自動再同期開始');
           fetchSubscriptions();
         }, 3000);
         
       } else {
-        addDebugInfo(`POST失敗: ${response.status} ${response.statusText}`);
+        addDebugInfo('POST失敗: ' + response.status + ' ' + response.statusText);
         handleLocalSave(newSub);
       }
     } catch (error) {
-      addDebugInfo(`POST エラー: ${error.message}`);
+      addDebugInfo('POST エラー: ' + error.message);
       handleLocalSave(newSub);
     } finally {
       setLoading(false);
     }
   };
 
-  // ローカル保存処理
   const handleLocalSave = (newSub) => {
-    const localSub = { 
-      ...newSub, 
+    const localSub = Object.assign({}, newSub, {
       nextRenewal: calculateNextRenewal(newSub.joinDate, newSub.billingCycle),
-      originalRow: subscriptions.length + 2 
-    };
-    const updatedSubs = [...subscriptions, localSub];
+      originalRow: subscriptions.length + 2
+    });
+    
+    const updatedSubs = subscriptions.concat([localSub]);
     setSubscriptions(updatedSubs);
     localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
     
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       serviceName: '',
       monthlyCost: '',
       billingCycle: 'monthly',
       category: 'その他',
-      joinDate: new Date().toISOString().split('T')[0]
+      joinDate: today
     });
     setShowForm(false);
     
@@ -325,9 +311,8 @@ export default function Home() {
     if (!deleteConfirm) return;
 
     setLoading(true);
-    addDebugInfo(`=== 削除開始: ID ${deleteConfirm} ===`);
+    addDebugInfo('=== 削除開始: ID ' + deleteConfirm + ' ===');
     
-    // 削除対象のアイテムを見つける
     const targetItem = subscriptions.find(sub => sub.id === deleteConfirm);
     if (!targetItem) {
       addDebugInfo('削除対象が見つかりません');
@@ -336,23 +321,21 @@ export default function Home() {
       return;
     }
     
-    addDebugInfo(`削除対象: ${targetItem.serviceName}`);
+    addDebugInfo('削除対象: ' + targetItem.serviceName);
     
     try {
-      // まずローカルで削除（UX向上）
       const updatedSubs = subscriptions.filter(sub => sub.id !== deleteConfirm);
       setSubscriptions(updatedSubs);
       localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
       setDeleteConfirm(null);
       
-      // Google Sheetsからも削除を試行（より安全な方法）
       const deleteData = { 
         serviceName: targetItem.serviceName,
         monthlyCost: targetItem.monthlyCost,
-        action: "delete" // 識別用
+        action: "delete"
       };
       
-      addDebugInfo(`DELETE送信: ${JSON.stringify(deleteData)}`);
+      addDebugInfo('DELETE送信: ' + JSON.stringify(deleteData));
       
       const response = await fetch(API_URLS.DELETE, {
         method: 'POST',
@@ -363,27 +346,24 @@ export default function Home() {
         body: JSON.stringify(deleteData)
       });
 
-      addDebugInfo(`DELETE ステータス: ${response.status}`);
+      addDebugInfo('DELETE ステータス: ' + response.status);
       
       if (response.ok) {
         const result = await response.text();
-        addDebugInfo(`DELETE 結果: ${result}`);
+        addDebugInfo('DELETE 結果: ' + result);
         addDebugInfo('Google Sheetsからも削除成功');
         
-        // 成功時は3秒後に再同期
         setTimeout(() => {
           addDebugInfo('削除後の自動再同期開始');
           fetchSubscriptions();
         }, 3000);
         
       } else {
-        addDebugInfo(`Google Sheets削除失敗: ${response.status}`);
-        // 失敗してもローカルでは削除済みなので問題なし
+        addDebugInfo('Google Sheets削除失敗: ' + response.status);
       }
       
     } catch (error) {
-      addDebugInfo(`削除エラー: ${error.message}`);
-      // エラーでもローカルでは削除済み
+      addDebugInfo('削除エラー: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -393,7 +373,6 @@ export default function Home() {
     setDeleteConfirm(null);
   };
 
-  // カテゴリ色分け
   const getCategoryStyle = (category) => {
     const colors = {
       'アプリ': { backgroundColor: '#f3e8ff', color: '#7c3aed' },
@@ -465,7 +444,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* デバッグ情報 */}
       {debugInfo && (
         <div style={{ 
           backgroundColor: '#f8f9fa', 
@@ -535,6 +513,15 @@ export default function Home() {
               <option value="その他">その他</option>
             </select>
           </div>
+          <div style={{ marginBottom: '10px' }}>
+            <label>加入日:</label>
+            <input
+              type="date"
+              value={formData.joinDate}
+              onChange={(e) => setFormData({...formData, joinDate: e.target.value})}
+              style={{ marginLeft: '10px', padding: '5px', width: '150px' }}
+            />
+          </div>
           <button 
             onClick={handleSubmit}
             disabled={loading}
@@ -566,7 +553,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* 削除確認モーダル */}
       {deleteConfirm && (
         <div style={{
           position: 'fixed',
@@ -589,7 +575,9 @@ export default function Home() {
           }}>
             <h3 style={{ marginBottom: '16px' }}>削除確認</h3>
             <p style={{ marginBottom: '24px' }}>
-              「{subscriptions.find(s => s.id === deleteConfirm)?.serviceName}」を削除しますか？
+              {subscriptions.find(s => s.id === deleteConfirm) ? 
+                '「' + subscriptions.find(s => s.id === deleteConfirm).serviceName + '」を削除しますか？' : 
+                '削除しますか？'}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
@@ -643,54 +631,60 @@ export default function Home() {
                 border: '1px solid #ddd',
                 borderRadius: '5px',
                 padding: '15px',
-                marginBottom: '10px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
+                marginBottom: '10px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1 }}>
-                <strong style={{ minWidth: '150px' }}>{sub.serviceName}</strong>
-                <span style={{
-                  ...getCategoryStyle(sub.category),
-                  padding: '3px 8px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  minWidth: '60px',
-                  textAlign: 'center'
-                }}>
-                  {sub.category}
-                </span>
-                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff', minWidth: '80px' }}>
-                  ¥{sub.monthlyCost.toLocaleString()}
-                </span>
-                <span style={{ color: '#666', fontSize: '14px', minWidth: '40px' }}>
-                  {sub.billingCycle === 'monthly' ? '月額' : '年額'}
-                </span>
-                {sub.billingCycle === 'yearly' && (
-                  <span style={{ color: '#28a745', fontSize: '14px', minWidth: '100px' }}>
-                    (月額換算: ¥{Math.round(sub.monthlyCost / 12).toLocaleString()})
-                  </span>
-                )}
-                <small style={{ color: '#999', fontSize: '10px' }}>
-                  ID: {sub.id.substring(0, 12)}... 行: {sub.originalRow || '?'}
-                </small>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '8px' }}>
+                    <strong style={{ minWidth: '150px' }}>{sub.serviceName}</strong>
+                    <span style={Object.assign({
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      minWidth: '60px',
+                      textAlign: 'center'
+                    }, getCategoryStyle(sub.category))}>
+                      {sub.category}
+                    </span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff', minWidth: '80px' }}>
+                      ¥{sub.monthlyCost.toLocaleString()}
+                    </span>
+                    <span style={{ color: '#666', fontSize: '14px', minWidth: '40px' }}>
+                      {sub.billingCycle === 'monthly' ? '月額' : '年額'}
+                    </span>
+                    {sub.billingCycle === 'yearly' && (
+                      <span style={{ color: '#28a745', fontSize: '14px', minWidth: '100px' }}>
+                        (月額換算: ¥{Math.round(sub.monthlyCost / 12).toLocaleString()})
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontSize: '12px', color: '#666' }}>
+                    <span>加入日: {formatDate(sub.joinDate)}</span>
+                    <span style={{ color: '#e11d48', fontWeight: '500' }}>
+                      次回更新: {formatDate(sub.nextRenewal)}
+                    </span>
+                    <small style={{ color: '#999', fontSize: '10px' }}>
+                      ID: {sub.id.substring(0, 12)}...
+                    </small>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => confirmDelete(sub.id)}
+                  disabled={loading}
+                  style={{ 
+                    backgroundColor: loading ? '#ccc' : '#dc3545', 
+                    color: 'white', 
+                    padding: '5px 10px', 
+                    border: 'none', 
+                    borderRadius: '3px',
+                    cursor: loading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  削除
+                </button>
               </div>
-              <button 
-                onClick={() => confirmDelete(sub.id)}
-                disabled={loading}
-                style={{ 
-                  backgroundColor: loading ? '#ccc' : '#dc3545', 
-                  color: 'white', 
-                  padding: '5px 10px', 
-                  border: 'none', 
-                  borderRadius: '3px',
-                  cursor: loading ? 'not-allowed' : 'pointer'
-                }}
-              >
-                削除
-              </button>
             </div>
           ))
         )}
