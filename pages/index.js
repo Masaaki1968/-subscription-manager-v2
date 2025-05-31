@@ -10,7 +10,8 @@ export default function Home() {
     serviceName: '',
     monthlyCost: '',
     billingCycle: 'monthly',
-    category: 'その他'
+    category: 'その他',
+    joinDate: new Date().toISOString().split('T')[0] // 今日の日付をデフォルト
   });
 
   // Make.com Webhook URLs
@@ -36,6 +37,17 @@ export default function Home() {
   // ユニークIDを生成
   const generateId = () => {
     return 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  };
+
+  // 日付を読みやすい形式に変換
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'numeric', 
+      day: 'numeric'
+    });
   };
 
   // Google Sheetsからデータ取得
@@ -93,8 +105,9 @@ export default function Home() {
               const billingCycle = row['3'] || 'monthly';
               const category = row['4'] || 'その他';
               const createdAt = row['5'] || '';
+              const joinDate = row['6'] || row['5'] || ''; // 加入日（新規追加または作成日を使用）
               
-              addDebugInfo(`変換: ${serviceName} - ¥${monthlyCost} - ${billingCycle} - ${category}`);
+              addDebugInfo(`変換: ${serviceName} - ¥${monthlyCost} - ${billingCycle} - ${category} - 加入日:${joinDate}`);
               
               return {
                 id: id,
@@ -103,6 +116,8 @@ export default function Home() {
                 billingCycle: billingCycle,
                 category: category,
                 createdAt: createdAt,
+                joinDate: joinDate,
+                nextRenewal: calculateNextRenewal(joinDate, billingCycle),
                 originalRow: index + 2 // Google Sheetsの行番号（ヘッダー考慮）
               };
             })
@@ -178,6 +193,7 @@ export default function Home() {
       monthlyCost: parseFloat(formData.monthlyCost),
       billingCycle: formData.billingCycle,
       category: formData.category,
+      joinDate: formData.joinDate,
       createdAt: new Date().toISOString().split('T')[0] // YYYY-MM-DD形式
     };
 
@@ -201,7 +217,12 @@ export default function Home() {
         addDebugInfo(`POST 結果: ${result}`);
         
         // ローカルに即座に追加
-        const updatedSubs = [...subscriptions, { ...newSub, originalRow: subscriptions.length + 2 }];
+        const localSub = { 
+          ...newSub, 
+          nextRenewal: calculateNextRenewal(newSub.joinDate, newSub.billingCycle),
+          originalRow: subscriptions.length + 2 
+        };
+        const updatedSubs = [...subscriptions, localSub];
         setSubscriptions(updatedSubs);
         localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
         
@@ -210,7 +231,8 @@ export default function Home() {
           serviceName: '',
           monthlyCost: '',
           billingCycle: 'monthly',
-          category: 'その他'
+          category: 'その他',
+          joinDate: new Date().toISOString().split('T')[0]
         });
         setShowForm(false);
         
@@ -234,7 +256,12 @@ export default function Home() {
 
   // ローカル保存処理
   const handleLocalSave = (newSub) => {
-    const updatedSubs = [...subscriptions, { ...newSub, originalRow: subscriptions.length + 2 }];
+    const localSub = { 
+      ...newSub, 
+      nextRenewal: calculateNextRenewal(newSub.joinDate, newSub.billingCycle),
+      originalRow: subscriptions.length + 2 
+    };
+    const updatedSubs = [...subscriptions, localSub];
     setSubscriptions(updatedSubs);
     localStorage.setItem('subscriptions', JSON.stringify(updatedSubs));
     
@@ -242,7 +269,8 @@ export default function Home() {
       serviceName: '',
       monthlyCost: '',
       billingCycle: 'monthly',
-      category: 'その他'
+      category: 'その他',
+      joinDate: new Date().toISOString().split('T')[0]
     });
     setShowForm(false);
     
