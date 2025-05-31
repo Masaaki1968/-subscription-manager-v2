@@ -39,6 +39,36 @@ export default function Home() {
     return 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   };
 
+  // 次回更新日を計算
+  const calculateNextRenewal = (joinDate, billingCycle) => {
+    if (!joinDate) return '';
+    
+    const join = new Date(joinDate);
+    const today = new Date();
+    
+    if (billingCycle === 'yearly') {
+      // 年額の場合
+      let nextRenewal = new Date(join);
+      nextRenewal.setFullYear(join.getFullYear() + 1);
+      
+      // 既に過ぎている場合は来年
+      while (nextRenewal <= today) {
+        nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+      }
+      return nextRenewal.toISOString().split('T')[0];
+    } else {
+      // 月額の場合
+      let nextRenewal = new Date(join);
+      nextRenewal.setMonth(join.getMonth() + 1);
+      
+      // 既に過ぎている場合は翌月
+      while (nextRenewal <= today) {
+        nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+      }
+      return nextRenewal.toISOString().split('T')[0];
+    }
+  };
+
   // 日付を読みやすい形式に変換
   const formatDate = (dateString) => {
     if (!dateString) return '';
